@@ -1,0 +1,223 @@
+require('dotenv').config();
+const dns = require('dns');
+dns.setServers(['1.1.1.1']);
+const express = require('express');
+const bodyParser = require('body-parser');
+const passport = require('passport');
+const authJwtController = require('./auth_jwt');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const User = require('./Users');
+const Movie = require('./Movies');
+const Reviews = require('./Reviews');
+
+mongoose.connect(process.env.DB)
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => { console.error('MongoDB connection error:', err); process.exit(1); });
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+
+app.use(passport.initialize());
+
+const router = express.Router();
+
+// Removed getJSONObjectForMovieRequirement as it's not used
+
+router.post('/signup', async (req, res) => { // Use async/await
+    if (!req.body.username || !req.body.password) {
+        return res.status(400).json({ success: false, msg: 'Please include both username and password to signup.' }); // 400 Bad Request
+    }
+    try {
+        const user = new User({ // Create user directly with the data
+            name: req.body.name,
+            username: req.body.username,
+            password: req.body.password,
+        });
+
+        await user.save(); // Use await with user.save()
+
+        res.status(200).json({ success: true, msg: 'Successfully created new user.' }); // 201 Created
+    } catch (err) {
+        if (err.code === 11000) { // Strict equality check (===)
+            return res.status(409).json({ success: false, message: 'A user with that username already exists.' }); // 409 Conflict
+        } else {
+            console.error(err); // Log the error for debugging
+            return res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' }); // 500 Internal Server Error
+        }
+    }
+});
+
+
+router.post('/signin', async (req, res) => { // Use async/await
+    try {
+        const user = await User.findOne({ username: req.body.username }).select('name username password');
+
+        if (!user) {
+            return res.status(401).json({ success: false, msg: 'Authentication failed. User not found.' }); // 401 Unauthorized
+        }
+
+        const isMatch = await user.comparePassword(req.body.password); // Use await
+
+        if (isMatch) {
+            const userToken = { id: user._id, username: user.username }; // Use user._id (standard Mongoose)
+            const token = jwt.sign(userToken, process.env.SECRET_KEY, { expiresIn: '1h' }); // Add expiry to the token (e.g., 1 hour)
+            res.json({ success: true, token: 'JWT ' + token });
+        } else {
+            res.status(401).json({ success: false, msg: 'Authentication failed. Incorrect password.' }); // 401 Unauthorized
+        }
+    } catch (err) {
+        console.error(err); // Log the error
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' }); // 500 Internal Server Error
+    }
+});
+
+router.route('/movies')
+    .get(authJwtController.isAuthenticated, async (req, res) => {
+        try {
+            const movies = await Movie.find({})
+            res.status(200).json({ success: true, message: movies })
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message })
+        }
+    })
+    .post(authJwtController.isAuthenticated, async (req, res) => {
+        if (!req.body.title || !req.body.actors || req.body.actors.length === 0) {
+            return res.status(400).json({ success: false, message: 'Movie must include a title and at least one actor.' });
+        }
+        try {
+            const movie = new Movie({
+                title: req.body.title,
+                releaseDate: req.body.releaseDate,
+                genre: req.body.genre,
+                actors: req.body.actors,
+            });
+            await movie.save();
+            res.status(200).json({ success: true, message: 'Movie saved.', movie });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    })
+    .all(authJwtController.isAuthenticated, async (req, res) => {
+        res.status(405).json({ success: false, message: "Non-Supported Action" });
+    })
+
+router.route('/movies/:movieparameter')
+    .get(authJwtController.isAuthenticated, async (req, res) => {
+        try {
+            if (req.query.reviews === 'true') {
+                const result = await Movie.aggregate([
+                    { $match: { title: req.params.movieparameter } },
+                    {
+                        $lookup: {
+                            from: 'reviews',
+                            localField: '_id',
+                            foreignField: 'movieId',
+                            as: 'reviews'
+                        }
+                    }
+                ]);
+                if (!result || result.length === 0) {
+                    return res.status(404).json({ success: false, message: "Movie Not Found" })
+                }
+                return res.status(200).json({ success: true, movie: result[0] })
+            }
+            const movie = await Movie.findOne({ title: req.params.movieparameter });
+            if (!movie) {
+                return res.status(404).json({ success: false, message: "Movie Not Found" });
+            }
+            res.status(200).json({ success: true, movie });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    })
+    .put(authJwtController.isAuthenticated, async (req, res) => {
+        try {
+            const movie = await Movie.findOneAndUpdate({ title: req.params.movieparameter },
+                { $set: req.body },
+                { new: true }
+            );
+            if (!movie) {
+                return res.status(404).json({ success: false, message: "Movie Not Found" });
+            }
+            res.status(200).json({ success: true, message: "Movie updated", movie });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    })
+    .delete(authJwtController.isAuthenticated, async (req, res) => {
+        try {
+            const movie = await Movie.findOneAndDelete({ title: req.params.movieparameter });
+            if (!movie) {
+                return res.status(404).json({ success: false, message: "Movie Not Found" });
+            }
+            await Reviews.deleteMany({ movieId: movie._id });
+            res.status(200).json({ success: true, message: "Movie deleted", movie });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    })
+    .all(authJwtController.isAuthenticated, async (req, res) => {
+        res.status(405).json({ success: false, message: "Non-Supported Action" });
+    })
+
+router.post("/reviews", authJwtController.isAuthenticated, async (req, res) => {
+    if (!req.body.movieId || req.body.movieId.length === 0)
+        return res.status(400).json({ success: false, message: "No Movie Id Provided" });
+    if (!req.body.username)
+        return res.status(400).json({ success: false, message: "Username not provided" });
+    const movie = await Movie.findById(req.body.movieId)
+    if (!movie)
+        return res.status(404).json({ success: false, message: "Movie Does Not Exist" });
+    try {
+        const review = new Reviews({
+            movieId: req.body.movieId,
+            username: req.body.username,
+            review: req.body.review,
+            rating: req.body.rating
+        });
+        await review.save();
+        res.status(200).json({ success: true, message: "Review created!", body: review });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+})
+
+router.route('/reviews/:id')
+    .get(async (req, res) => {
+        try {
+            const review = await Reviews.findById(req.params.id)
+            if (!review) {
+                return res.status(404).json({ success: false, message: 'Review Not Found' })
+            }
+            return res.status(200).json({ success: true, review })
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message })
+        }
+    })
+    .delete(authJwtController.isAuthenticated, async (req, res) => {
+        try {
+            const review = await Reviews.findById(req.params.id);
+            if (!review) {
+                return res.status(404).json({ success: false, message: 'Review Not Found' })
+            }
+            if (review.username !== req.user.username) {
+                return res.status(403).json({ success: false, message: 'Unauthorized: You may only delete your own revies' })
+            }
+            await Reviews.findByIdAndDelete(req.params.id);
+            res.status(200).json({ success: true, message: 'Review deleted' });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message })
+        }
+    });
+app.use('/', router);
+
+const PORT = process.env.PORT || 8080; // Define PORT before using it
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+module.exports = app; // for testing only
