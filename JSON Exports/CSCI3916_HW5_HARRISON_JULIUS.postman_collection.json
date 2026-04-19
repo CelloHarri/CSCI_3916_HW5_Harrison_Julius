@@ -1,10 +1,10 @@
 {
   "info": {
-    "_postman_id": "b278ce32-1570-42be-93e6-2985ced42210",
+    "_postman_id": "effd760d-543f-49b2-83f1-6f9ebab098c6",
     "name": "CSCI3916_HW5_HARRISON_JULIUS",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "51837637",
-    "_collection_link": "https://go.postman.co/collection/51837637-b278ce32-1570-42be-93e6-2985ced42210?source=collection_link"
+    "_collection_link": "https://go.postman.co/collection/51837637-effd760d-543f-49b2-83f1-6f9ebab098c6?source=collection_link"
   },
   "item": [
     {
@@ -473,7 +473,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\r\n    \"actors\": [\r\n    { \"actorName\": \"Michael B Jordan\", \"characterName\": \"Smoke\" },\r\n    { \"actorName\": \"Hailee Steinfeld\", \"characterName\": \"Mary\" },\r\n    { \"actorName\": \"Wunmi Mosaku\", \"characterName\": \"Annie\"}\r\n  ]\r\n}",
+          "raw": "{\r\n    \"imageUrl\": \"https://media.themoviedb.org/t/p/w94_and_h141_face/2FC9L9MrjBoGHYjYZjdWQdopVYb.jpg\"\r\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -481,7 +481,7 @@
           }
         },
         "url": {
-          "raw": "https://csci-3916-hw5-harrison-julius.onrender.com/movies/Sinners",
+          "raw": "https://csci-3916-hw5-harrison-julius.onrender.com/movies/The%20Princess%20Bride",
           "protocol": "https",
           "host": [
             "csci-3916-hw5-harrison-julius",
@@ -490,7 +490,7 @@
           ],
           "path": [
             "movies",
-            "Sinners"
+            "The%20Princess%20Bride"
           ]
         }
       },
