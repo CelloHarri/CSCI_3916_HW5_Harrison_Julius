@@ -94,6 +94,7 @@ router.route('/movies')
                 releaseDate: req.body.releaseDate,
                 genre: req.body.genre,
                 actors: req.body.actors,
+                imageUrl: req.body.imageUrl,
             });
             await movie.save();
             res.status(200).json({ success: true, message: 'Movie saved.', movie });
@@ -187,7 +188,7 @@ router.post("/reviews", authJwtController.isAuthenticated, async (req, res) => {
 })
 
 router.route('/reviews/:id')
-    .get(async (req, res) => {
+    .get(authJwtController.isAuthenticated, async (req, res) => {
         try {
             const review = await Reviews.findById(req.params.id)
             if (!review) {
