@@ -119,6 +119,11 @@ router.route('/movies/:movieparameter')
                             foreignField: 'movieId',
                             as: 'reviews'
                         }
+                    },
+                    {
+                        $addFields: {
+                            avgRating: { $avg: '$reviews.rating' }
+                        }
                     }
                 ]);
                 if (!result || result.length === 0) {
