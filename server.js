@@ -78,7 +78,24 @@ router.post('/signin', async (req, res) => { // Use async/await
 router.route('/movies')
     .get(authJwtController.isAuthenticated, async (req, res) => {
         try {
-            const movies = await Movie.find({})
+            const movies = await Movie.aggregate([
+                {
+                    $lookup: {
+                        from: 'reviews',
+                        localField: '_id',
+                        foreignField: 'movieId',
+                        as: 'reviews'
+                    }
+                },
+                {
+                    $addFields: {
+                        avgRating: { $avg: '$reviews.rating' }
+                    }
+                },
+                {
+                    $sort: { avgRating: -1 }
+                }
+            ]);
             res.status(200).json({ success: true, message: movies })
         } catch (err) {
             res.status(500).json({ success: false, message: err.message })
